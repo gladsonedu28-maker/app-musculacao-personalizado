@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Dumbbell, Target, TrendingUp, User, Calendar, Flame, Trophy, Crown } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Dumbbell, Target, TrendingUp, User, Calendar, Flame, Trophy, Crown, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,6 +12,7 @@ import NutritionSection from "@/components/custom/nutrition-section";
 import ProgressSection from "@/components/custom/progress-section";
 import SubscriptionFlow, { SubscriptionData } from "@/components/custom/subscription-flow";
 import PlansPage from "@/components/custom/plans-page";
+import { getCurrentUser, signOut } from "@/lib/auth";
 
 export type UserGoal = "weight_loss" | "muscle_gain" | "definition";
 
@@ -34,40 +36,72 @@ export interface WorkoutLog {
 }
 
 export default function FitnessApp() {
+  const router = useRouter();
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showSubscriptionFlow, setShowSubscriptionFlow] = useState(false);
   const [showPlansPage, setShowPlansPage] = useState(false);
   const [workoutLogs, setWorkoutLogs] = useState<WorkoutLog[]>([]);
   const [activeTab, setActiveTab] = useState("treinos");
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Carregar dados do localStorage
-    const savedProfile = localStorage.getItem("fitnessProfile");
-    const savedLogs = localStorage.getItem("workoutLogs");
-
-    if (savedProfile) {
-      const profile = JSON.parse(savedProfile);
-      setUserProfile(profile);
-      
-      // Se não tem plano de assinatura, mostrar página de planos
-      if (!profile.subscriptionPlan) {
-        setShowPlansPage(true);
-      }
-    } else {
-      setShowOnboarding(true);
-    }
-
-    if (savedLogs) {
-      setWorkoutLogs(JSON.parse(savedLogs));
-    }
+    checkAuth();
   }, []);
+
+  const checkAuth = async () => {
+    try {
+      const user = await getCurrentUser();
+      
+      if (!user) {
+        router.push("/login");
+        return;
+      }
+
+      setIsAuthenticated(true);
+      
+      // Carregar dados do localStorage
+      const savedProfile = localStorage.getItem("fitnessProfile");
+      const savedLogs = localStorage.getItem("workoutLogs");
+
+      if (savedProfile) {
+        const profile = JSON.parse(savedProfile);
+        setUserProfile(profile);
+        
+        // Se não tem plano de assinatura, mostrar página de planos
+        if (!profile.subscriptionPlan) {
+          setShowPlansPage(true);
+        }
+      } else {
+        setShowOnboarding(true);
+      }
+
+      if (savedLogs) {
+        setWorkoutLogs(JSON.parse(savedLogs));
+      }
+    } catch (error) {
+      console.error("Erro ao verificar autenticação:", error);
+      router.push("/login");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await signOut();
+      router.push("/login");
+    } catch (error) {
+      console.error("Erro ao fazer logout:", error);
+    }
+  };
 
   const handleProfileComplete = (profile: UserProfile) => {
     setUserProfile(profile);
     localStorage.setItem("fitnessProfile", JSON.stringify(profile));
     setShowOnboarding(false);
-    setShowPlansPage(true); // Mostrar página de planos após onboarding
+    setShowPlansPage(true);
   };
 
   const handleSubscriptionComplete = (data: SubscriptionData) => {
@@ -80,7 +114,7 @@ export default function FitnessApp() {
       localStorage.setItem("fitnessProfile", JSON.stringify(updatedProfile));
     }
     setShowSubscriptionFlow(false);
-    setShowPlansPage(true); // Mostrar página de planos após subscription flow
+    setShowPlansPage(true);
   };
 
   const handlePlanSelect = (planId: string) => {
@@ -142,6 +176,17 @@ export default function FitnessApp() {
     return quotes[Math.floor(Math.random() * quotes.length)];
   };
 
+  // Loading
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-black">
+        <div className="animate-pulse text-orange-500">
+          <Dumbbell className="w-12 h-12" />
+        </div>
+      </div>
+    );
+  }
+
   // Mostrar fluxo de assinatura
   if (showSubscriptionFlow) {
     return (
@@ -167,7 +212,7 @@ export default function FitnessApp() {
     return <OnboardingModal onComplete={handleProfileComplete} />;
   }
 
-  // Loading
+  // Loading profile
   if (!userProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-gray-900 via-gray-800 to-black">
@@ -206,6 +251,14 @@ export default function FitnessApp() {
                 onClick={() => setShowOnboarding(true)}
               >
                 <User className="w-6 h-6" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="text-white hover:bg-white/20 border border-white/20"
+                onClick={handleLogout}
+              >
+                <LogOut className="w-6 h-6" />
               </Button>
             </div>
           </div>
